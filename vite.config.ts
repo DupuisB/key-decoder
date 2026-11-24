@@ -8,5 +8,13 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three'],
+        },
+      },
+    },
   },
 });
