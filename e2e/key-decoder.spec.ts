@@ -109,17 +109,36 @@ test.describe('Key Decoder End-to-End Verification', () => {
     await page.getByTestId('apply-custom-keyway').click();
     await page.getByTestId('custom-keyway-toggle').click();
 
-    // 8. Capture clean mobile layout screenshot
-    await page.getByTestId('tab-decode').click();
-    await page.getByTestId('load-sample-btn').click();
-    await page.getByTestId('print-options-toggle').click(); // collapse options
-    await page.getByTestId('theme-toggle').click(); // back to light
+    // 8. Test Mobile 1:1 On-Screen Card Calibration -> Lock Scale -> Trace Key & Step Cuts
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(250);
+    await page.goto('/');
+
+    // Mobile auto-opens On-Screen (1:1) tab!
+    await expect(page.getByTestId('screen-calibration-view')).toBeVisible();
+    await expect(page.getByTestId('card-calibration-bar')).toBeVisible();
+    await page.getByTestId('scale-inc-btn').click();
+    await page.waitForTimeout(200);
     await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, 'simple-mobile-light.png'),
+      path: path.join(SCREENSHOT_DIR, 'mobile-screen-calibrate.png'),
       fullPage: true,
     });
+
+    // Lock scale -> 1:1 physical backlit key trace surface + thumb cut controls all on screen
+    await page.getByTestId('lock-scale-btn').click();
+    await expect(page.getByTestId('screen-trace-locked-view')).toBeVisible();
+    await expect(page.getByTestId('trace-1to1-svg')).toBeVisible();
+    await page.getByTestId('pin-2-inc').click();
+    await page.waitForTimeout(200);
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, 'mobile-screen-locked.png'),
+      fullPage: true,
+    });
+
+    // Verify recalibrate & flip/contrast toggles work cleanly
+    await page.getByTestId('trace-contrast-btn').click();
+    await page.getByTestId('trace-flip-btn').click();
+    await page.getByTestId('recalibrate-scale-btn').click();
+    await expect(page.getByTestId('screen-calibration-view')).toBeVisible();
 
     expect(pageErrors, `Uncaught page errors: ${pageErrors.join('; ')}`).toEqual([]);
     expect(consoleErrors, `Console errors: ${consoleErrors.join('; ')}`).toEqual([]);

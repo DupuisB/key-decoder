@@ -6,6 +6,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
 import { KeyPreview3D } from './components/KeyPreview3D';
 import { KeywaySelector } from './components/KeywaySelector';
+import { ScreenTraceMode } from './components/ScreenTraceMode';
 import { buildCustomKeywaySpec, clampCutsToSpec, formatBittingCode } from './domain/bitting';
 import { DEFAULT_KEYWAY_ID, getKeywayById, KEYWAY_PRESETS } from './domain/keyways';
 import { generateSampleKeyPhoto } from './domain/sampleKey';
@@ -56,7 +57,9 @@ export function App() {
   const { theme, toggleTheme } = useTheme();
   const initial = useMemo(() => getInitialSpecAndCuts(), []);
 
-  const [activeTab, setActiveTab] = useState<'decode' | 'preview3d'>('decode');
+  const [activeTab, setActiveTab] = useState<'decode' | 'screen' | 'preview3d'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'screen' : 'decode',
+  );
   const [selectedSpec, setSelectedSpec] = useState<KeywaySpec>(initial.spec);
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customInput, setCustomInput] = useState<CustomKeywayInput>(DEFAULT_CUSTOM_INPUT);
@@ -191,19 +194,31 @@ export function App() {
               type="button"
               data-testid="tab-decode"
               onClick={() => setActiveTab('decode')}
-              className={`border-b-2 px-4 py-2 text-xs font-medium ${
+              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
                 activeTab === 'decode'
                   ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
                   : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
               }`}
             >
-              Photo &amp; Alignment
+              Photo
+            </button>
+            <button
+              type="button"
+              data-testid="tab-screen"
+              onClick={() => setActiveTab('screen')}
+              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
+                activeTab === 'screen'
+                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              On-Screen (1:1)
             </button>
             <button
               type="button"
               data-testid="tab-3d"
               onClick={() => setActiveTab('preview3d')}
-              className={`border-b-2 px-4 py-2 text-xs font-medium ${
+              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
                 activeTab === 'preview3d'
                   ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
                   : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -226,6 +241,8 @@ export function App() {
               onSelectPin={setActivePinIndex}
               onChangeCut={handleChangeCut}
             />
+          ) : activeTab === 'screen' ? (
+            <ScreenTraceMode spec={selectedSpec} cuts={cuts} activePinIndex={activePinIndex} />
           ) : (
             <KeyPreview3D mesh={manifoldMesh} theme={theme} />
           )}
