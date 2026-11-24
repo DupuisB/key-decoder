@@ -45,9 +45,7 @@ function getInitialSpecAndCuts(): { spec: KeywaySpec; cuts: number[] } {
     const decoded = decodeStateFromHash(window.location.hash);
     if (decoded) {
       const found = getKeywayById(decoded.keywayId);
-      if (found) {
-        return { spec: found, cuts: decoded.cuts };
-      }
+      if (found) return { spec: found, cuts: decoded.cuts };
     }
   }
   return { spec: defaultSpec, cuts: [...defaultSpec.defaultCuts] };
@@ -57,6 +55,7 @@ export function App() {
   const { theme, toggleTheme } = useTheme();
   const initial = useMemo(() => getInitialSpecAndCuts(), []);
 
+  const [activeTab, setActiveTab] = useState<'decode' | 'preview3d'>('decode');
   const [selectedSpec, setSelectedSpec] = useState<KeywaySpec>(initial.spec);
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customInput, setCustomInput] = useState<CustomKeywayInput>(DEFAULT_CUSTOM_INPUT);
@@ -66,19 +65,14 @@ export function App() {
   const [printOptions, setPrintOptions] = useState<PrintOptions>(DEFAULT_PRINT_OPTIONS);
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageLabel, setImageLabel] = useState<string | null>(null);
   const [isObjectUrl, setIsObjectUrl] = useState(false);
 
-  // Revoke previous object URL when replaced or unmounted
   useEffect(() => {
     return () => {
-      if (isObjectUrl && imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
+      if (isObjectUrl && imageUrl) URL.revokeObjectURL(imageUrl);
     };
   }, [imageUrl, isObjectUrl]);
 
-  // Keep URL hash in sync locally (only for standard presets)
   useEffect(() => {
     if (isCustomMode) return;
     const nextHash = encodeStateToHash(selectedSpec.id, cuts);
@@ -136,42 +130,32 @@ export function App() {
 
   const handleUploadFile = useCallback(
     (file: File) => {
-      if (isObjectUrl && imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
-      const nextUrl = URL.createObjectURL(file);
-      setImageUrl(nextUrl);
+      if (isObjectUrl && imageUrl) URL.revokeObjectURL(imageUrl);
+      setImageUrl(URL.createObjectURL(file));
       setIsObjectUrl(true);
-      setImageLabel(file.name);
       setAlignment(DEFAULT_ALIGNMENT);
+      setActiveTab('decode');
     },
     [imageUrl, isObjectUrl],
   );
 
   const handleLoadSample = useCallback(() => {
-    if (isObjectUrl && imageUrl) {
-      URL.revokeObjectURL(imageUrl);
-    }
+    if (isObjectUrl && imageUrl) URL.revokeObjectURL(imageUrl);
     const sampleCuts = [...selectedSpec.defaultCuts];
     const sample = generateSampleKeyPhoto(selectedSpec, sampleCuts);
     setImageUrl(sample.dataUrl);
     setIsObjectUrl(false);
-    setImageLabel(`Sample ${selectedSpec.code} (${formatBittingCode(sampleCuts, '-')})`);
     setAlignment(sample.initialAlignment);
-    // Start user cuts slightly offset by 1 step on pins 2 and 4 so shape-matching is immediately demonstrable,
-    // or exact default? Keep default cuts matching cleanly so user sees instant alignment and can tweak!
     setCuts(sampleCuts);
+    setActiveTab('decode');
   }, [imageUrl, isObjectUrl, selectedSpec]);
 
   const handleCopyShareLink = useCallback(() => {
     const hash = encodeStateToHash(selectedSpec.id, cuts);
     const fullUrl = `${window.location.origin}${window.location.pathname}${hash}`;
-    navigator.clipboard?.writeText(fullUrl).catch(() => {
-      // Ignore clipboard failures in restricted environments
-    });
+    navigator.clipboard?.writeText(fullUrl).catch(() => {});
   }, [cuts, selectedSpec.id]);
 
-  // Procedural watertight 3D manifold mesh (recomputed instantaneously < 5ms)
   const manifoldMesh = useMemo(
     () => buildKeyMesh(selectedSpec, cuts, printOptions),
     [selectedSpec, cuts, printOptions],
@@ -179,8 +163,7 @@ export function App() {
 
   const handleDownloadStl = useCallback(() => {
     const code = selectedSpec.code.replace(/[^A-Za-z0-9_-]/g, '');
-    const bittingCompact = formatBittingCode(cuts, '');
-    const fileName = `${code}-${bittingCompact}.stl`;
+    const fileName = `${code}-${formatBittingCode(cuts, '')}.stl`;
     const header = `KeyDecoder ${code} ${formatBittingCode(cuts, '-')} (mm watertight)`;
     const buffer = exportMeshToBinaryStl(manifoldMesh, header);
     const blob = new Blob([buffer], { type: 'application/octet-stream' });
@@ -195,66 +178,97 @@ export function App() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [cuts, manifoldMesh, selectedSpec.code]);
 
-  const keyLabel = `${selectedSpec.code} · ${formatBittingCode(cuts, '-')}`;
-
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 transition-colors dark:bg-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
-      <main className="mx-auto grid max-w-[1600px] grid-cols-1 gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1fr)_390px] xl:grid-cols-[minmax(0,1fr)_420px]">
-        {/* Left Primary Workspace: 2D Alignment Overlay + Live 3D STL Preview */}
-        <div className="flex min-w-0 flex-col gap-4">
-          <DecoderCanvas
-            spec={selectedSpec}
-            cuts={cuts}
-            imageUrl={imageUrl}
-            imageLabel={imageLabel}
-            alignment={alignment}
-            activePinIndex={activePinIndex}
-            onChangeAlignment={setAlignment}
-            onUploadFile={handleUploadFile}
-            onLoadSample={handleLoadSample}
-            onSelectPin={setActivePinIndex}
-            onChangeCut={handleChangeCut}
-          />
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_310px]">
+        {/* Left: Single clean tabbed viewport (Photo Alignment OR 3D Preview) */}
+        <section className="overflow-hidden rounded border border-zinc-300 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <button
+              type="button"
+              data-testid="tab-decode"
+              onClick={() => setActiveTab('decode')}
+              className={`border-b-2 px-4 py-2 text-xs font-medium ${
+                activeTab === 'decode'
+                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              Photo &amp; Alignment
+            </button>
+            <button
+              type="button"
+              data-testid="tab-3d"
+              onClick={() => setActiveTab('preview3d')}
+              className={`border-b-2 px-4 py-2 text-xs font-medium ${
+                activeTab === 'preview3d'
+                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              3D Preview
+            </button>
+          </div>
 
-          <KeyPreview3D mesh={manifoldMesh} theme={theme} keyLabel={keyLabel} />
-        </div>
-
-        {/* Right Engineering Controls Sidebar */}
-        <aside className="flex flex-col gap-4">
-          <KeywaySelector
-            selectedSpec={selectedSpec}
-            isCustomMode={isCustomMode}
-            onSelectPreset={handleSelectPreset}
-            onToggleCustomMode={handleToggleCustomMode}
-          />
-
-          {isCustomMode && (
-            <CustomKeywayPanel initialInput={customInput} onApply={handleApplyCustom} />
+          {activeTab === 'decode' ? (
+            <DecoderCanvas
+              spec={selectedSpec}
+              cuts={cuts}
+              imageUrl={imageUrl}
+              alignment={alignment}
+              activePinIndex={activePinIndex}
+              onChangeAlignment={setAlignment}
+              onUploadFile={handleUploadFile}
+              onLoadSample={handleLoadSample}
+              onSelectPin={setActivePinIndex}
+              onChangeCut={handleChangeCut}
+            />
+          ) : (
+            <KeyPreview3D mesh={manifoldMesh} theme={theme} />
           )}
+        </section>
 
-          <CutControls
-            spec={selectedSpec}
-            cuts={cuts}
-            activePinIndex={activePinIndex}
-            onSelectPin={setActivePinIndex}
-            onChangeCut={handleChangeCut}
-            onResetCuts={handleResetCuts}
-            onCopyShareLink={handleCopyShareLink}
-          />
+        {/* Right: Single clean utilitarian control column */}
+        <aside className="flex flex-col divide-y divide-zinc-200 rounded border border-zinc-300 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="space-y-3 p-3.5">
+            <KeywaySelector
+              selectedSpec={selectedSpec}
+              isCustomMode={isCustomMode}
+              onSelectPreset={handleSelectPreset}
+              onToggleCustomMode={handleToggleCustomMode}
+            />
+            {isCustomMode && (
+              <CustomKeywayPanel initialInput={customInput} onApply={handleApplyCustom} />
+            )}
+          </div>
 
-          <ExportPanel
-            spec={selectedSpec}
-            cuts={cuts}
-            printOptions={printOptions}
-            mesh={manifoldMesh}
-            onChangePrintOptions={setPrintOptions}
-            onDownloadStl={handleDownloadStl}
-          />
+          <div className="p-3.5">
+            <CutControls
+              spec={selectedSpec}
+              cuts={cuts}
+              activePinIndex={activePinIndex}
+              onSelectPin={setActivePinIndex}
+              onChangeCut={handleChangeCut}
+              onResetCuts={handleResetCuts}
+              onCopyShareLink={handleCopyShareLink}
+            />
+          </div>
+
+          <div className="p-3.5">
+            <ExportPanel
+              spec={selectedSpec}
+              cuts={cuts}
+              printOptions={printOptions}
+              onChangePrintOptions={setPrintOptions}
+              onDownloadStl={handleDownloadStl}
+            />
+          </div>
         </aside>
       </main>
     </div>
   );
 }
+
 export default App;
