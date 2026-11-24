@@ -15,42 +15,38 @@ export function KeywaySelector({
   onToggleCustomMode,
 }: KeywaySelectorProps) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor="keyway-select"
-          className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
-        >
-          Keyway
-        </label>
-        <button
-          type="button"
-          onClick={onToggleCustomMode}
-          data-testid="custom-keyway-toggle"
-          className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-        >
-          {isCustomMode ? 'Use preset' : 'Custom'}
-        </button>
-      </div>
-
-      {!isCustomMode && (
+    <div className="flex items-center gap-2">
+      {!isCustomMode ? (
         <select
-          id="keyway-select"
+          aria-label="Keyway"
           data-testid="keyway-select"
           value={selectedSpec.id}
           onChange={(e) => {
             const found = KEYWAY_PRESETS.find((k) => k.id === e.target.value);
             if (found) onSelectPreset(found);
           }}
-          className="w-full rounded border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="h-9 min-w-0 flex-1 rounded-lg bg-black/[0.05] px-2.5 text-[13px] font-medium text-[#1d1d1f] focus:ring-2 focus:ring-[#007aff]/40 focus:outline-none dark:bg-white/[0.09] dark:text-[#f5f5f7]"
         >
           {KEYWAY_PRESETS.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.code} — {k.manufacturer} ({k.pinCount}-pin, {k.depthMin}–{k.depthMax})
+            <option key={k.id} value={k.id} className="bg-white text-black dark:bg-[#1c1c1e] dark:text-white">
+              {k.code} · {k.manufacturer}
             </option>
           ))}
         </select>
+      ) : (
+        <span className="flex-1 text-[13px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+          {selectedSpec.name}
+        </span>
       )}
+
+      <button
+        type="button"
+        onClick={onToggleCustomMode}
+        data-testid="custom-keyway-toggle"
+        className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-[#007aff] transition hover:bg-[#007aff]/10 dark:text-[#0a84ff]"
+      >
+        {isCustomMode ? 'Presets' : 'Custom'}
+      </button>
     </div>
   );
 }

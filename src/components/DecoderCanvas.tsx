@@ -24,7 +24,7 @@ interface DecoderCanvasProps {
 type DragMode = 'none' | 'pan' | 'shoulder' | 'width' | 'spineAngle' | 'skew';
 
 function normalizeAngleDeg(deg: number): number {
-  let a = ((deg + 180) % 360 + 360) % 360 - 180;
+  let a = (((deg + 180) % 360) + 360) % 360 - 180;
   if (a <= -180) a += 360;
   return Number(a.toFixed(2));
 }
@@ -46,7 +46,7 @@ export function DecoderCanvas({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 520 });
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 560 });
   const [viewZoom, setViewZoom] = useState(1);
   const [pan, setPan] = useState<Point2D>({ x: 0, y: 0 });
   const [brightness, setBrightness] = useState(100);
@@ -135,12 +135,6 @@ export function DecoderCanvas({
     [centerX, centerY, flipHorizontal, stageH, stageW, viewScale],
   );
 
-  /**
-   * Locksmith-accurate blade-width & top-shoulder coordinate frame:
-   * - Handle A: Top Shoulder Stop corner (x = 0, y = bladeWidthMm)
-   * - Handle H: Bottom Spine width caliper (sets exact mm/px scale from factory bladeWidthMm, independent of tip length)
-   * - Handle B: Bottom Spine angle guide (sets exact spine rotation angle without changing scale)
-   */
   const keyTransform = useMemo(() => {
     const shoulderTopScr = normToScreen(alignment.shoulderTop);
     const baseAngleRad = ((alignment.angleDeg + alignment.rotationOffsetDeg) * Math.PI) / 180;
@@ -148,7 +142,6 @@ export function DecoderCanvas({
 
     const dir: Point2D = { x: Math.cos(thetaVis), y: Math.sin(thetaVis) };
     const sSign = (flipHorizontal ? -1 : 1) * (alignment.flipVertical ? -1 : 1);
-    // Unit vector pointing from top edge (A) down to bottom spine (y = 0)
     const spineDir: Point2D = {
       x: -sSign * Math.sin(thetaVis),
       y: sSign * Math.cos(thetaVis),
@@ -203,7 +196,6 @@ export function DecoderCanvas({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // 1. Photo
     if (loadedImage) {
       ctx.save();
       ctx.translate(centerX, centerY);
@@ -215,7 +207,6 @@ export function DecoderCanvas({
       ctx.restore();
     }
 
-    // 2. Crisp key silhouette & alignment reference lines
     const { keyToScreen, shoulderTopScr, widthHandleScr, spineAngleHandleScr, skewHandleScr } =
       keyTransform;
     const profile = computeBittingProfile(spec, cuts);
@@ -227,7 +218,7 @@ export function DecoderCanvas({
       badPins.add(v.pinIndexB);
     }
 
-    // Blade bitting polygon
+    // Blade bitting silhouette
     ctx.beginPath();
     const sOrigin = keyToScreen(0, 0);
     ctx.moveTo(sOrigin.x, sOrigin.y);
@@ -242,57 +233,57 @@ export function DecoderCanvas({
     }
     ctx.closePath();
 
-    ctx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+    ctx.fillStyle = 'rgba(10, 132, 255, 0.14)';
     ctx.fill();
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    // Uncut blank top reference line (helps visually lock A & H onto uncut top land!)
+    // Uncut blank top reference
     const topL = keyToScreen(0, bladeWidthMm);
     const topR = keyToScreen(bladeLengthMm * 0.94, bladeWidthMm);
     ctx.beginPath();
     ctx.moveTo(topL.x, topL.y);
     ctx.lineTo(topR.x, topR.y);
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(255, 214, 10, 0.45)';
+    ctx.lineWidth = 1.1;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Top shoulder stop vertical reference line (extends up along the bow step and down across blade)
+    // Top shoulder stop vertical line
     const shLow = keyToScreen(0, -1.5);
-    const shHigh = keyToScreen(0, bladeWidthMm + 4.5);
+    const shHigh = keyToScreen(0, bladeWidthMm + 4.2);
     ctx.beginPath();
     ctx.moveTo(shLow.x, shLow.y);
     ctx.lineTo(shHigh.x, shHigh.y);
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.6;
     ctx.setLineDash([5, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Subtle caliper guide connecting top uncut line down to H (blade width)
+    // Caliper line to H
     const calTop = keyToScreen(bladeLengthMm * 0.28, bladeWidthMm);
     ctx.beginPath();
     ctx.moveTo(calTop.x, calTop.y);
     ctx.lineTo(widthHandleScr.x, widthHandleScr.y);
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
-    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = 'rgba(255, 214, 10, 0.65)';
+    ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Highlighted straight bottom spine line
+    // Straight bottom spine line
     ctx.beginPath();
     ctx.moveTo(sOrigin.x, sOrigin.y);
     ctx.lineTo(sTipBot.x, sTipBot.y);
-    ctx.strokeStyle = '#4ade80';
+    ctx.strokeStyle = '#30d158';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Pin vertical guides + depth tick ladders
+    // Pin vertical guides + depth ticks
     const tickHalfMm = Math.min(0.55, inToMm(spec.pinSpacingIn) * 0.16);
     for (let i = 0; i < spec.pinCount; i++) {
       const cxMm = spacesMm[i]!;
@@ -301,15 +292,15 @@ export function DecoderCanvas({
       const isBad = badPins.has(i);
 
       const pBot = keyToScreen(cxMm, 0);
-      const pTop = keyToScreen(cxMm, bladeWidthMm + 1.2);
+      const pTop = keyToScreen(cxMm, bladeWidthMm + 1.1);
       ctx.beginPath();
       ctx.moveTo(pBot.x, pBot.y);
       ctx.lineTo(pTop.x, pTop.y);
       ctx.strokeStyle = isBad
-        ? 'rgba(239, 68, 68, 0.8)'
+        ? 'rgba(255, 69, 58, 0.85)'
         : isFocused
           ? 'rgba(56, 189, 248, 0.9)'
-          : 'rgba(255, 255, 255, 0.35)';
+          : 'rgba(255, 255, 255, 0.32)';
       ctx.lineWidth = isFocused ? 1.5 : 1;
       ctx.stroke();
 
@@ -323,25 +314,24 @@ export function DecoderCanvas({
         ctx.lineTo(tR.x, tR.y);
         ctx.strokeStyle = isCurrent
           ? isBad
-            ? '#ef4444'
-            : '#facc15'
-          : 'rgba(255, 255, 255, 0.45)';
-        ctx.lineWidth = isCurrent ? 2.5 : 1;
+            ? '#ff453a'
+            : '#ffd60a'
+          : 'rgba(255, 255, 255, 0.42)';
+        ctx.lineWidth = isCurrent ? 2.4 : 1;
         ctx.stroke();
       }
 
-      const lbl = keyToScreen(cxMm, bladeWidthMm + 2.4);
-      ctx.font = '600 11px ui-monospace, SFMono-Regular, monospace';
+      const lbl = keyToScreen(cxMm, bladeWidthMm + 2.3);
+      ctx.font = '600 11px -apple-system, ui-monospace, monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isBad ? '#f87171' : '#f8fafc';
+      ctx.fillStyle = isBad ? '#ff453a' : '#ffffff';
       ctx.strokeStyle = 'rgba(0,0,0,0.75)';
       ctx.lineWidth = 3;
       ctx.strokeText(String(i + 1), lbl.x, lbl.y);
       ctx.fillText(String(i + 1), lbl.x, lbl.y);
     }
 
-    // 3. Draggable Anchor Handles: A (Top Shoulder), H (Blade Width/Scale), B (Spine Angle)
     const drawAnchor = (pt: Point2D, letter: string, color: string) => {
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
@@ -351,7 +341,7 @@ export function DecoderCanvas({
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
+      ctx.font = '600 11px -apple-system, system-ui, sans-serif';
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -359,10 +349,10 @@ export function DecoderCanvas({
     };
 
     drawAnchor(shoulderTopScr, 'A', '#38bdf8');
-    drawAnchor(widthHandleScr, 'H', '#facc15');
-    drawAnchor(spineAngleHandleScr, 'B', '#4ade80');
+    drawAnchor(widthHandleScr, 'H', '#ffd60a');
+    drawAnchor(spineAngleHandleScr, 'B', '#30d158');
     if (showSkewHandle) {
-      drawAnchor(skewHandleScr, 'C', '#c084fc');
+      drawAnchor(skewHandleScr, 'C', '#bf5af2');
     }
 
     ctx.restore();
@@ -421,27 +411,16 @@ export function DecoderCanvas({
         x: state.startPan.x + (pt.x - state.startScreen.x),
         y: state.startPan.y + (pt.y - state.startScreen.y),
       });
-      return;
-    }
-
-    if (state.mode === 'shoulder') {
+    } else if (state.mode === 'shoulder') {
       onChangeAlignment({ ...alignment, shoulderTop: screenToNorm(pt) });
-      return;
-    }
-
-    if (state.mode === 'width') {
-      // Perpendicular distance from A (top shoulder) down to pointer along spineDir
+    } else if (state.mode === 'width') {
       const vx = pt.x - keyTransform.shoulderTopScr.x;
       const vy = pt.y - keyTransform.shoulderTopScr.y;
       const wPx = Math.max(16, vx * keyTransform.spineDir.x + vy * keyTransform.spineDir.y);
       const denom = Math.max(1, stageH * viewScale * alignment.scaleMultiplier * alignment.heightScaleMultiplier);
       const nextRatio = Math.max(0.03, Math.min(0.85, wPx / denom));
       onChangeAlignment({ ...alignment, bladeWidthRatio: Number(nextRatio.toFixed(5)) });
-      return;
-    }
-
-    if (state.mode === 'spineAngle') {
-      // Rotate around A so the bottom spine line (at perpendicular distance effectiveSpineDistPx) passes through pointer
+    } else if (state.mode === 'spineAngle') {
       const vx = pt.x - keyTransform.shoulderTopScr.x;
       const vy = pt.y - keyTransform.shoulderTopScr.y;
       const r = Math.hypot(vx, vy);
@@ -454,10 +433,7 @@ export function DecoderCanvas({
         const nextAngleDeg = normalizeAngleDeg((baseRad * 180) / Math.PI - alignment.rotationOffsetDeg);
         onChangeAlignment({ ...alignment, angleDeg: nextAngleDeg });
       }
-      return;
-    }
-
-    if (state.mode === 'skew') {
+    } else if (state.mode === 'skew') {
       const vx = pt.x - keyTransform.shoulderTopScr.x;
       const vy = pt.y - keyTransform.shoulderTopScr.y;
       const alongX = vx * keyTransform.dir.x + vy * keyTransform.dir.y;
@@ -511,31 +487,55 @@ export function DecoderCanvas({
     if (file && file.type.startsWith('image/')) onUploadFile(file);
   };
 
-  const btnCls =
-    'rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
+  const pillBtn =
+    'rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md transition hover:bg-black/75';
 
   return (
-    <div className="flex flex-col">
-      {/* Simple single toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            data-testid="photo-file-input"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onUploadFile(f);
-              e.target.value = '';
-            }}
-          />
+    <div
+      ref={containerRef}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleDrop}
+      className={`relative h-[54vh] min-h-[340px] w-full flex-1 select-none overflow-hidden bg-[#111113] lg:h-full ${
+        isDragOver ? 'ring-2 ring-[#007aff] ring-inset' : ''
+      }`}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        data-testid="photo-file-input"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onUploadFile(f);
+          e.target.value = '';
+        }}
+      />
+
+      <canvas
+        ref={canvasRef}
+        data-testid="decoder-canvas"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleWheel}
+        style={{ touchAction: 'none' }}
+        className="block h-full w-full cursor-grab active:cursor-grabbing"
+      />
+
+      {/* Floating minimal controls — zero separate toolbar row */}
+      <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5">
           <button
             type="button"
             data-testid="upload-photo-btn"
             onClick={() => fileInputRef.current?.click()}
-            className="rounded bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200"
+            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black shadow-xs transition hover:bg-white/90"
           >
             Open Photo
           </button>
@@ -543,34 +543,18 @@ export function DecoderCanvas({
             type="button"
             data-testid="load-sample-btn"
             onClick={onLoadSample}
-            className={btnCls}
+            className={pillBtn}
           >
-            Sample Key
+            Sample
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setViewZoom((z) => Math.max(0.4, Number((z / 1.15).toFixed(3))))}
-            aria-label="Zoom out"
-            className={btnCls}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewZoom((z) => Math.min(6, Number((z * 1.15).toFixed(3))))}
-            aria-label="Zoom in"
-            className={btnCls}
-          >
-            +
-          </button>
+        <div className="pointer-events-auto flex items-center gap-1">
           <button
             type="button"
             data-testid="flip-horizontal-btn"
             onClick={() => setFlipHorizontal((f) => !f)}
-            className={btnCls}
+            className={pillBtn}
           >
             Flip H
           </button>
@@ -578,7 +562,7 @@ export function DecoderCanvas({
             type="button"
             data-testid="flip-vertical-btn"
             onClick={() => onChangeAlignment({ ...alignment, flipVertical: !alignment.flipVertical })}
-            className={btnCls}
+            className={pillBtn}
           >
             Flip V
           </button>
@@ -586,21 +570,20 @@ export function DecoderCanvas({
             type="button"
             data-testid="toggle-adjust-tools-btn"
             onClick={() => setShowTools((s) => !s)}
-            className={btnCls}
+            className={pillBtn}
           >
-            {showTools ? 'Hide tools' : 'Adjust'}
+            Adjust
           </button>
         </div>
       </div>
 
-      {/* Collapsible fine-tune / image adjustments */}
+      {/* Collapsible floating fine-tune popover */}
       {showTools && (
         <div
           data-testid="adjust-tools-bar"
-          className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400"
+          className="absolute right-3 top-13 z-20 flex flex-wrap items-center gap-3 rounded-xl bg-black/80 px-3 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md"
         >
           <div className="flex items-center gap-1">
-            <span>Rot:</span>
             <button
               type="button"
               data-testid="nudge-rot-minus"
@@ -610,7 +593,7 @@ export function DecoderCanvas({
                   rotationOffsetDeg: Number((alignment.rotationOffsetDeg - 0.5).toFixed(1)),
                 })
               }
-              className={btnCls}
+              className="rounded bg-white/15 px-2 py-1 hover:bg-white/25"
             >
               −0.5°
             </button>
@@ -623,14 +606,13 @@ export function DecoderCanvas({
                   rotationOffsetDeg: Number((alignment.rotationOffsetDeg + 0.5).toFixed(1)),
                 })
               }
-              className={btnCls}
+              className="rounded bg-white/15 px-2 py-1 hover:bg-white/25"
             >
               +0.5°
             </button>
           </div>
 
           <div className="flex items-center gap-1">
-            <span>Scale:</span>
             <button
               type="button"
               data-testid="nudge-scale-minus"
@@ -640,7 +622,7 @@ export function DecoderCanvas({
                   scaleMultiplier: Math.max(0.5, Number((alignment.scaleMultiplier - 0.005).toFixed(4))),
                 })
               }
-              className={btnCls}
+              className="rounded bg-white/15 px-2 py-1 hover:bg-white/25"
             >
               −0.5%
             </button>
@@ -653,33 +635,33 @@ export function DecoderCanvas({
                   scaleMultiplier: Math.min(1.6, Number((alignment.scaleMultiplier + 0.005).toFixed(4))),
                 })
               }
-              className={btnCls}
+              className="rounded bg-white/15 px-2 py-1 hover:bg-white/25"
             >
               +0.5%
             </button>
           </div>
 
           <label className="flex items-center gap-1.5">
-            <span>Bright</span>
+            <span className="text-white/60">Bright</span>
             <input
               type="range"
               min={50}
               max={180}
               value={brightness}
               onChange={(e) => setBrightness(Number(e.target.value))}
-              className="w-20 accent-blue-600"
+              className="w-16"
             />
           </label>
 
           <label className="flex items-center gap-1.5">
-            <span>Contrast</span>
+            <span className="text-white/60">Contrast</span>
             <input
               type="range"
               min={50}
               max={200}
               value={contrast}
               onChange={(e) => setContrast(Number(e.target.value))}
-              className="w-20 accent-blue-600"
+              className="w-16"
             />
           </label>
 
@@ -689,9 +671,9 @@ export function DecoderCanvas({
               data-testid="toggle-skew-handle-btn"
               checked={showSkewHandle}
               onChange={(e) => setShowSkewHandle(e.target.checked)}
-              className="accent-blue-600"
+              className="accent-[#0a84ff]"
             />
-            Skew (C)
+            Skew
           </label>
 
           <button
@@ -709,60 +691,18 @@ export function DecoderCanvas({
                 skewY: 0,
               });
             }}
-            className="text-xs underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="text-white/60 hover:text-white"
           >
-            Reset view
+            Reset
           </button>
         </div>
       )}
 
-      {/* Main Canvas */}
-      <div
-        ref={containerRef}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={handleDrop}
-        className={`relative h-[420px] w-full select-none overflow-hidden bg-zinc-900 sm:h-[520px] ${
-          isDragOver ? 'ring-2 ring-blue-500 ring-inset' : ''
-        }`}
-      >
-        <canvas
-          ref={canvasRef}
-          data-testid="decoder-canvas"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onWheel={handleWheel}
-          style={{ touchAction: 'none' }}
-          className="block h-full w-full cursor-grab active:cursor-grabbing"
-        />
-
-        {!loadedImage && (
-          <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-center">
-            <div className="pointer-events-auto rounded bg-zinc-950/85 px-3 py-1.5 text-xs text-zinc-200">
-              Drop a key photo here, click <strong>Open Photo</strong>, or load a{' '}
-              <button
-                type="button"
-                onClick={onLoadSample}
-                className="underline underline-offset-2 hover:text-white"
-              >
-                Sample Key
-              </button>
-              .
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Clear 3-step locksmith alignment instruction */}
-      <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-        1. Drag <strong className="text-sky-600 dark:text-sky-400">A</strong> to top shoulder corner · 2. Drag{' '}
-        <strong className="text-amber-600 dark:text-amber-400">H</strong> to bottom spine (scale) · 3. Drag{' '}
-        <strong className="text-emerald-600 dark:text-emerald-400">B</strong> along bottom spine (angle)
+      {/* Minimal unobtrusive anchor legend pill at bottom-left */}
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/55 px-2.5 py-1 text-[11px] text-white/75 backdrop-blur-md">
+        <span className="font-semibold text-[#38bdf8]">A</span> shoulder ·{' '}
+        <span className="font-semibold text-[#ffd60a]">H</span> width ·{' '}
+        <span className="font-semibold text-[#30d158]">B</span> spine
       </div>
     </div>
   );

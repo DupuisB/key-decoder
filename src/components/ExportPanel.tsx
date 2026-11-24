@@ -29,30 +29,32 @@ export function ExportPanel({
         type="button"
         data-testid="download-stl-btn"
         onClick={onDownloadStl}
-        className="w-full rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 active:bg-blue-800"
+        className="h-10 w-full rounded-xl bg-[#007aff] px-4 text-sm font-semibold text-white transition hover:bg-[#0066d6] active:scale-[0.99] dark:bg-[#0a84ff] dark:hover:bg-[#0071e3]"
       >
         Download {fileName}
       </button>
 
-      <button
-        type="button"
-        data-testid="print-options-toggle"
-        onClick={() => setShowOptions((s) => !s)}
-        className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        {showOptions ? 'Hide print options' : 'Print options & tips'}
-      </button>
+      <div className="flex justify-center">
+        <button
+          type="button"
+          data-testid="print-options-toggle"
+          onClick={() => setShowOptions((s) => !s)}
+          className="text-xs font-medium text-black/45 transition hover:text-black dark:text-white/45 dark:hover:text-white"
+        >
+          {showOptions ? 'Hide print options' : 'Print options'}
+        </button>
+      </div>
 
       {showOptions && (
         <div
           data-testid="print-options-box"
-          className="space-y-2.5 rounded border border-zinc-200 bg-zinc-50 p-2.5 text-xs dark:border-zinc-800 dark:bg-zinc-900/50"
+          className="space-y-3 rounded-xl bg-black/[0.04] p-3 text-xs dark:bg-white/[0.06]"
         >
           <div>
-            <div className="mb-1 flex justify-between text-zinc-700 dark:text-zinc-300">
-              <label htmlFor="thickness-scale">Blade thickness</label>
-              <span className="font-mono">
-                {Math.round(printOptions.bladeThicknessScale * 100)}% ({effectiveThickMm.toFixed(2)} mm)
+            <div className="mb-1.5 flex justify-between text-black/70 dark:text-white/75">
+              <label htmlFor="thickness-scale">Thickness</label>
+              <span className="font-mono tabular-nums">
+                {Math.round(printOptions.bladeThicknessScale * 100)}% · {effectiveThickMm.toFixed(2)} mm
               </span>
             </div>
             <input
@@ -69,38 +71,40 @@ export function ExportPanel({
                   bladeThicknessScale: Number.parseFloat(e.target.value),
                 })
               }
-              className="h-1.5 w-full cursor-pointer accent-blue-600"
+              className="w-full"
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-2 text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              data-testid="reinforced-bow-toggle"
-              checked={printOptions.reinforcedBow}
-              onChange={(e) =>
-                onChangePrintOptions({ ...printOptions, reinforcedBow: e.target.checked })
-              }
-              className="accent-blue-600"
-            />
-            Reinforced bow (+0.8 mm)
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex cursor-pointer items-center gap-2 text-black/75 dark:text-white/80">
+              <input
+                type="checkbox"
+                data-testid="reinforced-bow-toggle"
+                checked={printOptions.reinforcedBow}
+                onChange={(e) =>
+                  onChangePrintOptions({ ...printOptions, reinforcedBow: e.target.checked })
+                }
+                className="accent-[#007aff]"
+              />
+              Thick bow
+            </label>
 
-          <label className="flex cursor-pointer items-center gap-2 text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              data-testid="warding-grooves-toggle"
-              checked={printOptions.includeWarding}
-              onChange={(e) =>
-                onChangePrintOptions({ ...printOptions, includeWarding: e.target.checked })
-              }
-              className="accent-blue-600"
-            />
-            Warding grooves
-          </label>
+            <label className="flex cursor-pointer items-center gap-2 text-black/75 dark:text-white/80">
+              <input
+                type="checkbox"
+                data-testid="warding-grooves-toggle"
+                checked={printOptions.includeWarding}
+                onChange={(e) =>
+                  onChangePrintOptions({ ...printOptions, includeWarding: e.target.checked })
+                }
+                className="accent-[#007aff]"
+              />
+              Grooves
+            </label>
+          </div>
 
-          <p className="border-t border-zinc-200 pt-2 text-[11px] leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-            Print flat on bed (Z=0), 100% infill / all walls, PLA+/PETG/Nylon. Emergency backup use only.
+          <p className="text-[11px] text-black/45 dark:text-white/45">
+            Flat on bed (Z=0) · 100% infill · PLA+/PETG/Nylon · Backup use only.
           </p>
         </div>
       )}

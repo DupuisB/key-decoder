@@ -3,7 +3,7 @@ import { CustomKeywayPanel } from './components/CustomKeywayPanel';
 import { CutControls } from './components/CutControls';
 import { DecoderCanvas } from './components/DecoderCanvas';
 import { ExportPanel } from './components/ExportPanel';
-import { Header } from './components/Header';
+import { type AppMode, Header } from './components/Header';
 import { KeyPreview3D } from './components/KeyPreview3D';
 import { KeywaySelector } from './components/KeywaySelector';
 import { ScreenTraceMode } from './components/ScreenTraceMode';
@@ -33,11 +33,11 @@ const DEFAULT_CUSTOM_INPUT: CustomKeywayInput = {
   spaces: [0.237, 0.393, 0.549, 0.705, 0.861],
   rootDepths: [0.315, 0.297, 0.279, 0.261, 0.243, 0.225, 0.207, 0.189, 0.171, 0.153],
   depthMin: 0,
-  bladeWidth: 0.335,
-  bladeLength: 1.075,
+  bladeWidth: 0.318,
+  bladeLength: 1.09,
   bladeThickness: 0.083,
-  cutFlat: 0.045,
-  cutAngleDeg: 90,
+  cutFlat: 0.062,
+  cutAngleDeg: 100,
   macs: 6,
 };
 
@@ -57,7 +57,7 @@ export function App() {
   const { theme, toggleTheme } = useTheme();
   const initial = useMemo(() => getInitialSpecAndCuts(), []);
 
-  const [activeTab, setActiveTab] = useState<'decode' | 'screen' | 'preview3d'>(() =>
+  const [mode, setMode] = useState<AppMode>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'screen' : 'decode',
   );
   const [selectedSpec, setSelectedSpec] = useState<KeywaySpec>(initial.spec);
@@ -138,7 +138,7 @@ export function App() {
       setImageUrl(URL.createObjectURL(file));
       setIsObjectUrl(true);
       setAlignment(DEFAULT_ALIGNMENT);
-      setActiveTab('decode');
+      setMode('decode');
     },
     [imageUrl, isObjectUrl],
   );
@@ -151,7 +151,7 @@ export function App() {
     setIsObjectUrl(false);
     setAlignment(sample.initialAlignment);
     setCuts(sampleCuts);
-    setActiveTab('decode');
+    setMode('decode');
   }, [imageUrl, isObjectUrl, selectedSpec]);
 
   const handleCopyShareLink = useCallback(() => {
@@ -183,52 +183,13 @@ export function App() {
   }, [cuts, manifoldMesh, selectedSpec.code]);
 
   return (
-    <div className="min-h-screen bg-zinc-100 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <Header theme={theme} onToggleTheme={toggleTheme} />
+    <div className="flex min-h-dvh flex-col bg-white text-[#1d1d1f] lg:h-dvh lg:overflow-hidden dark:bg-black dark:text-[#f5f5f7]">
+      <Header mode={mode} onChangeMode={setMode} theme={theme} onToggleTheme={toggleTheme} />
 
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_310px]">
-        {/* Left: Single clean tabbed viewport (Photo Alignment OR 3D Preview) */}
-        <section className="overflow-hidden rounded border border-zinc-300 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="flex border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40">
-            <button
-              type="button"
-              data-testid="tab-decode"
-              onClick={() => setActiveTab('decode')}
-              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
-                activeTab === 'decode'
-                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-            >
-              Photo
-            </button>
-            <button
-              type="button"
-              data-testid="tab-screen"
-              onClick={() => setActiveTab('screen')}
-              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
-                activeTab === 'screen'
-                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-            >
-              On-Screen (1:1)
-            </button>
-            <button
-              type="button"
-              data-testid="tab-3d"
-              onClick={() => setActiveTab('preview3d')}
-              className={`border-b-2 px-3.5 py-2 text-xs font-medium ${
-                activeTab === 'preview3d'
-                  ? 'border-blue-600 text-zinc-900 dark:text-zinc-100'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-            >
-              3D Preview
-            </button>
-          </div>
-
-          {activeTab === 'decode' ? (
+      <main className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
+        {/* Full-bleed primary workspace */}
+        <section className="flex min-w-0 flex-1 flex-col">
+          {mode === 'decode' ? (
             <DecoderCanvas
               spec={selectedSpec}
               cuts={cuts}
@@ -241,16 +202,16 @@ export function App() {
               onSelectPin={setActivePinIndex}
               onChangeCut={handleChangeCut}
             />
-          ) : activeTab === 'screen' ? (
+          ) : mode === 'screen' ? (
             <ScreenTraceMode spec={selectedSpec} cuts={cuts} activePinIndex={activePinIndex} />
           ) : (
             <KeyPreview3D mesh={manifoldMesh} theme={theme} />
           )}
         </section>
 
-        {/* Right: Single clean utilitarian control column */}
-        <aside className="flex flex-col divide-y divide-zinc-200 rounded border border-zinc-300 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="space-y-3 p-3.5">
+        {/* Clean hairline-separated inspector (right on desktop, flush bottom on mobile) */}
+        <aside className="flex shrink-0 flex-col divide-y divide-black/8 border-t border-black/8 bg-white lg:w-[320px] lg:overflow-y-auto lg:border-t-0 lg:border-l dark:divide-white/10 dark:border-white/10 dark:bg-[#1c1c1e]">
+          <div className="p-4">
             <KeywaySelector
               selectedSpec={selectedSpec}
               isCustomMode={isCustomMode}
@@ -262,7 +223,7 @@ export function App() {
             )}
           </div>
 
-          <div className="p-3.5">
+          <div className="p-4">
             <CutControls
               spec={selectedSpec}
               cuts={cuts}
@@ -274,7 +235,7 @@ export function App() {
             />
           </div>
 
-          <div className="p-3.5">
+          <div className="p-4">
             <ExportPanel
               spec={selectedSpec}
               cuts={cuts}

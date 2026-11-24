@@ -30,7 +30,7 @@ export function KeyPreview3D({ mesh, theme }: KeyPreview3DProps) {
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     } catch {
-      setWebglError('WebGL unavailable. STL download still works.');
+      setWebglError('WebGL unavailable.');
       return;
     }
 
@@ -59,7 +59,7 @@ export function KeyPreview3D({ mesh, theme }: KeyPreview3DProps) {
     controls.update();
     controlsRef.current = controls;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.1));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.15));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
     keyLight.position.set(32, 48, 36);
     scene.add(keyLight);
@@ -85,7 +85,7 @@ export function KeyPreview3D({ mesh, theme }: KeyPreview3DProps) {
     keyGroup.add(keyMesh);
     meshObjRef.current = keyMesh;
 
-    const wireMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x0a84ff, transparent: true, opacity: 0.6 });
     const wireLines = new THREE.LineSegments(new THREE.BufferGeometry(), wireMat);
     wireLines.visible = false;
     keyGroup.add(wireLines);
@@ -151,15 +151,15 @@ export function KeyPreview3D({ mesh, theme }: KeyPreview3DProps) {
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    scene.background = new THREE.Color(theme === 'dark' ? 0x18181b : 0xf4f4f5);
+    scene.background = new THREE.Color(theme === 'dark' ? 0x000000 : 0xf5f5f7);
     if (gridObjRef.current) {
       scene.remove(gridObjRef.current);
       gridObjRef.current.geometry.dispose();
     }
     const nextGrid =
       theme === 'dark'
-        ? new THREE.GridHelper(90, 18, 0x52525b, 0x27272a)
-        : new THREE.GridHelper(90, 18, 0xa1a1aa, 0xd4d4d8);
+        ? new THREE.GridHelper(90, 18, 0x3a3a3c, 0x1c1c1e)
+        : new THREE.GridHelper(90, 18, 0xc7c7cc, 0xe5e5ea);
     nextGrid.position.set(0, -0.02, 0);
     scene.add(nextGrid);
     gridObjRef.current = nextGrid;
@@ -174,53 +174,46 @@ export function KeyPreview3D({ mesh, theme }: KeyPreview3DProps) {
     ctrls.update();
   };
 
-  const btnCls =
-    'rounded border border-zinc-300 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
+  const pillBtn =
+    'rounded-lg bg-black/[0.06] px-2.5 py-1 text-xs font-medium text-black/75 backdrop-blur-md transition hover:bg-black/[0.12] dark:bg-white/[0.12] dark:text-white/85 dark:hover:bg-white/[0.2]';
 
   const lenMm = (mesh.bounds.maxX - mesh.bounds.minX).toFixed(1);
   const hMm = (mesh.bounds.maxY - mesh.bounds.minY).toFixed(1);
   const tMm = (mesh.bounds.maxZ - mesh.bounds.minZ).toFixed(2);
 
   return (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
-        <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">
-          {lenMm} × {hMm} × {tMm} mm
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            data-testid="toggle-wireframe-btn"
-            onClick={() => setWireframe((w) => !w)}
-            className={btnCls}
-          >
-            {wireframe ? 'Hide edges' : 'Edges'}
-          </button>
-          <button type="button" onClick={() => setView('top')} className={btnCls}>
-            Top
-          </button>
-          <button type="button" onClick={() => setView('iso')} className={btnCls}>
-            Reset
-          </button>
+    <div className="relative h-[54vh] min-h-[340px] w-full flex-1 lg:h-full">
+      {webglError ? (
+        <div className="flex h-full items-center justify-center text-xs text-black/50 dark:text-white/50">
+          {webglError}
         </div>
+      ) : (
+        <div
+          ref={mountRef}
+          data-testid="preview-3d-canvas-wrap"
+          className="h-full w-full cursor-grab active:cursor-grabbing"
+        />
+      )}
+
+      <div className="pointer-events-none absolute left-3 top-3 font-mono text-[11px] tabular-nums text-black/45 dark:text-white/45">
+        {lenMm} × {hMm} × {tMm} mm
       </div>
 
-      <div className="h-[420px] w-full sm:h-[520px]">
-        {webglError ? (
-          <div className="flex h-full items-center justify-center p-4 text-xs text-zinc-500">
-            {webglError}
-          </div>
-        ) : (
-          <div
-            ref={mountRef}
-            data-testid="preview-3d-canvas-wrap"
-            className="h-full w-full cursor-grab active:cursor-grabbing"
-          />
-        )}
-      </div>
-
-      <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-        Drag to rotate, scroll to zoom. Model rests flat on the build plate (Z = 0).
+      <div className="absolute right-3 top-3 flex items-center gap-1">
+        <button
+          type="button"
+          data-testid="toggle-wireframe-btn"
+          onClick={() => setWireframe((w) => !w)}
+          className={pillBtn}
+        >
+          Edges
+        </button>
+        <button type="button" onClick={() => setView('top')} className={pillBtn}>
+          Top
+        </button>
+        <button type="button" onClick={() => setView('iso')} className={pillBtn}>
+          Reset
+        </button>
       </div>
     </div>
   );
