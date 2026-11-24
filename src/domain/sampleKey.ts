@@ -28,16 +28,18 @@ export function generateSampleKeyPhoto(
   canvas.height = height;
   const ctx = canvas.getContext('2d');
 
-  // Normalized shoulder and tip locations in image space (slight realistic tilt ~ -4.5 deg)
-  const shoulderPx = { x: 465, y: 392 };
+  // Normalized shoulder and angle in image space (slight realistic tilt ~ -4.2 deg)
+  const shoulderSpinePx = { x: 465, y: 392 };
   const bladeLengthMm = inToMm(spec.bladeLengthIn);
   const bladeWidthMm = inToMm(spec.bladeWidthIn);
   const pxPerMm = 18.2;
-  const angleRad = (-4.2 * Math.PI) / 180;
+  const angleDeg = -4.2;
+  const angleRad = (angleDeg * Math.PI) / 180;
 
-  const tipPx = {
-    x: shoulderPx.x + Math.cos(angleRad) * bladeLengthMm * pxPerMm,
-    y: shoulderPx.y + Math.sin(angleRad) * bladeLengthMm * pxPerMm,
+  // Top shoulder corner (x=0, y=bladeWidthMm) in image pixels (+Y in key coords is -Y in image coords)
+  const shoulderTopPx = {
+    x: shoulderSpinePx.x + Math.sin(angleRad) * bladeWidthMm * pxPerMm,
+    y: shoulderSpinePx.y - Math.cos(angleRad) * bladeWidthMm * pxPerMm,
   };
 
   if (ctx) {
@@ -73,7 +75,7 @@ export function generateSampleKeyPhoto(
 
     // 2. Transform into key coordinate frame (origin at shoulder bottom spine, +X right, +Y UP -> canvas -Y)
     ctx.save();
-    ctx.translate(shoulderPx.x, shoulderPx.y);
+    ctx.translate(shoulderSpinePx.x, shoulderSpinePx.y);
     ctx.rotate(angleRad);
     ctx.scale(pxPerMm, -pxPerMm);
 
@@ -194,8 +196,9 @@ export function generateSampleKeyPhoto(
     groundTruthKeywayId: spec.id,
     groundTruthCuts: [...cuts],
     initialAlignment: {
-      shoulder: { x: shoulderPx.x / width, y: shoulderPx.y / height },
-      tip: { x: tipPx.x / width, y: tipPx.y / height },
+      shoulderTop: { x: shoulderTopPx.x / width, y: shoulderTopPx.y / height },
+      angleDeg,
+      bladeWidthRatio: (bladeWidthMm * pxPerMm) / height,
       rotationOffsetDeg: 0,
       scaleMultiplier: 1,
       heightScaleMultiplier: 1,

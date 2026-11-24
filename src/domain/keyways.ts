@@ -116,12 +116,12 @@ export const KEYWAY_PRESETS: readonly KeywaySpec[] = [
     ],
   },
 
-  // 3. Kwikset KW1 (5-pin) — HPC C18 / DSD #12
+  // 3. Kwikset KW1 (5-pin) — HPC C18 / DSD #12 (also used by Weiser SmartKey)
   {
     id: 'KW1',
     code: 'KW1',
-    name: 'Kwikset KW1 (5-Pin)',
-    manufacturer: 'Kwikset',
+    name: 'Kwikset KW1 / Weiser SmartKey (5-Pin)',
+    manufacturer: 'Kwikset / Weiser SmartKey',
     ilcoRef: '1176',
     dsdRef: 'HPC C18 / DSD #12',
     category: 'residential',

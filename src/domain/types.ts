@@ -95,17 +95,19 @@ export interface PrintOptions {
 }
 
 export interface AnchorAlignment {
-  /** Shoulder stop point (x=0, y=bladeWidth/2 or spine) in normalized image coordinates (0..1) */
-  shoulder: Point2D;
-  /** Blade tip point in normalized image coordinates (0..1) */
-  tip: Point2D;
+  /** Top shoulder stop corner (x=0, y=bladeWidthMm) in normalized image coordinates (0..1) */
+  shoulderTop: Point2D;
+  /** Blade axis angle in degrees (in unflipped image space; 0 = pointing right) */
+  angleDeg: number;
+  /** Blade width (spine-to-uncut-top) as a fraction of image height — locks exact mm/px scale independent of tip length */
+  bladeWidthRatio: number;
   /** Fine rotation offset in degrees */
   rotationOffsetDeg: number;
-  /** Fine scale multiplier (1.0 = exact anchor distance) */
+  /** Fine scale multiplier (1.0 = exact H handle blade width) */
   scaleMultiplier: number;
-  /** Optional vertical height scale (3rd anchor / perspective skew compensation) */
+  /** Optional vertical height scale (perspective skew compensation) */
   heightScaleMultiplier: number;
-  /** Optional skew factor along Y/X for perspective tilt compensation (-0.25..0.25) */
+  /** Optional skew factor along X per unit Y for perspective tilt compensation (-0.35..0.35) */
   skewY: number;
   /** Flip key bitting vertically (teeth on top vs teeth on bottom in photo) */
   flipVertical: boolean;

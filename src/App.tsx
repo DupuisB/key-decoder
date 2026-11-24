@@ -16,8 +16,9 @@ import { exportMeshToBinaryStl } from './geometry/stlExport';
 import { useTheme } from './hooks/useTheme';
 
 const DEFAULT_ALIGNMENT: AnchorAlignment = {
-  shoulder: { x: 0.36, y: 0.56 },
-  tip: { x: 0.76, y: 0.56 },
+  shoulderTop: { x: 0.36, y: 0.38 },
+  angleDeg: 0,
+  bladeWidthRatio: 0.21,
   rotationOffsetDeg: 0,
   scaleMultiplier: 1,
   heightScaleMultiplier: 1,

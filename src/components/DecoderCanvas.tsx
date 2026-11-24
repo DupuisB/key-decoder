@@ -21,7 +21,13 @@ interface DecoderCanvasProps {
   onChangeCut: (pinIndex: number, nextDepth: number) => void;
 }
 
-type DragMode = 'none' | 'pan' | 'shoulder' | 'tip' | 'skew';
+type DragMode = 'none' | 'pan' | 'shoulder' | 'width' | 'spineAngle' | 'skew';
+
+function normalizeAngleDeg(deg: number): number {
+  let a = ((deg + 180) % 360 + 360) % 360 - 180;
+  if (a <= -180) a += 360;
+  return Number(a.toFixed(2));
+}
 
 export function DecoderCanvas({
   spec,
@@ -129,47 +135,55 @@ export function DecoderCanvas({
     [centerX, centerY, flipHorizontal, stageH, stageW, viewScale],
   );
 
+  /**
+   * Locksmith-accurate blade-width & top-shoulder coordinate frame:
+   * - Handle A: Top Shoulder Stop corner (x = 0, y = bladeWidthMm)
+   * - Handle H: Bottom Spine width caliper (sets exact mm/px scale from factory bladeWidthMm, independent of tip length)
+   * - Handle B: Bottom Spine angle guide (sets exact spine rotation angle without changing scale)
+   */
   const keyTransform = useMemo(() => {
-    const shoulderScr = normToScreen(alignment.shoulder);
-    const tipScr = normToScreen(alignment.tip);
-    const dx = tipScr.x - shoulderScr.x;
-    const dy = tipScr.y - shoulderScr.y;
-    const anchorDistPx = Math.max(20, Math.hypot(dx, dy));
-    const baseAngleRad = Math.atan2(dy, dx);
-    const totalAngleRad = baseAngleRad + (alignment.rotationOffsetDeg * Math.PI) / 180;
-    const pxPerMm = (anchorDistPx / bladeLengthMm) * alignment.scaleMultiplier;
-    const ySign = alignment.flipVertical ? 1 : -1;
-    const cos = Math.cos(totalAngleRad);
-    const sin = Math.sin(totalAngleRad);
+    const shoulderTopScr = normToScreen(alignment.shoulderTop);
+    const baseAngleRad = ((alignment.angleDeg + alignment.rotationOffsetDeg) * Math.PI) / 180;
+    const thetaVis = flipHorizontal ? Math.PI - baseAngleRad : baseAngleRad;
 
-    const keyToScreen = (xMm: number, yMm: number): Point2D => {
-      const lx = (xMm + yMm * alignment.skewY) * pxPerMm;
-      const ly = ySign * yMm * pxPerMm * alignment.heightScaleMultiplier;
-      return {
-        x: shoulderScr.x + lx * cos - ly * sin,
-        y: shoulderScr.y + lx * sin + ly * cos,
-      };
+    const dir: Point2D = { x: Math.cos(thetaVis), y: Math.sin(thetaVis) };
+    const sSign = (flipHorizontal ? -1 : 1) * (alignment.flipVertical ? -1 : 1);
+    // Unit vector pointing from top edge (A) down to bottom spine (y = 0)
+    const spineDir: Point2D = {
+      x: -sSign * Math.sin(thetaVis),
+      y: sSign * Math.cos(thetaVis),
     };
 
-    const screenToKeyLocalPx = (pt: Point2D): Point2D => {
-      const rx = pt.x - shoulderScr.x;
-      const ry = pt.y - shoulderScr.y;
+    const bladeWidthPx = Math.max(
+      14,
+      alignment.bladeWidthRatio * stageH * viewScale * alignment.scaleMultiplier,
+    );
+    const pxPerMm = bladeWidthPx / bladeWidthMm;
+    const effectiveSpineDistPx = bladeWidthPx * alignment.heightScaleMultiplier;
+
+    const keyToScreen = (xMm: number, yMm: number): Point2D => {
+      const dyDownMm = bladeWidthMm - yMm;
+      const ux = (xMm + (yMm - bladeWidthMm) * alignment.skewY) * pxPerMm;
+      const uy = dyDownMm * pxPerMm * alignment.heightScaleMultiplier;
       return {
-        x: rx * cos + ry * sin,
-        y: -rx * sin + ry * cos,
+        x: shoulderTopScr.x + ux * dir.x + uy * spineDir.x,
+        y: shoulderTopScr.y + ux * dir.y + uy * spineDir.y,
       };
     };
 
     return {
-      shoulderScr,
-      tipScr,
-      skewHandleScr: keyToScreen(bladeLengthMm * 0.5, bladeWidthMm),
+      shoulderTopScr,
+      widthHandleScr: keyToScreen(bladeLengthMm * 0.28, 0),
+      spineAngleHandleScr: keyToScreen(bladeLengthMm * 0.82, 0),
+      skewHandleScr: keyToScreen(bladeLengthMm * 0.55, bladeWidthMm),
+      dir,
+      spineDir,
+      sSign,
       pxPerMm,
-      ySign,
+      effectiveSpineDistPx,
       keyToScreen,
-      screenToKeyLocalPx,
     };
-  }, [alignment, bladeLengthMm, bladeWidthMm, normToScreen]);
+  }, [alignment, bladeLengthMm, bladeWidthMm, flipHorizontal, normToScreen, stageH, viewScale]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -201,8 +215,9 @@ export function DecoderCanvas({
       ctx.restore();
     }
 
-    // 2. Simple, high-contrast vector key outline + pin guides
-    const { keyToScreen, shoulderScr, tipScr, skewHandleScr } = keyTransform;
+    // 2. Crisp key silhouette & alignment reference lines
+    const { keyToScreen, shoulderTopScr, widthHandleScr, spineAngleHandleScr, skewHandleScr } =
+      keyTransform;
     const profile = computeBittingProfile(spec, cuts);
     const spacesMm = getAllSpacesMm(spec);
     const macsViolations = checkMacsViolations(spec, cuts);
@@ -212,7 +227,7 @@ export function DecoderCanvas({
       badPins.add(v.pinIndexB);
     }
 
-    // Blade polygon
+    // Blade bitting polygon
     ctx.beginPath();
     const sOrigin = keyToScreen(0, 0);
     ctx.moveTo(sOrigin.x, sOrigin.y);
@@ -234,19 +249,50 @@ export function DecoderCanvas({
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    // Shoulder stop vertical line
-    const shLow = keyToScreen(0, -3);
-    const shHigh = keyToScreen(0, bladeWidthMm + 3);
+    // Uncut blank top reference line (helps visually lock A & H onto uncut top land!)
+    const topL = keyToScreen(0, bladeWidthMm);
+    const topR = keyToScreen(bladeLengthMm * 0.94, bladeWidthMm);
+    ctx.beginPath();
+    ctx.moveTo(topL.x, topL.y);
+    ctx.lineTo(topR.x, topR.y);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Top shoulder stop vertical reference line (extends up along the bow step and down across blade)
+    const shLow = keyToScreen(0, -1.5);
+    const shHigh = keyToScreen(0, bladeWidthMm + 4.5);
     ctx.beginPath();
     ctx.moveTo(shLow.x, shLow.y);
     ctx.lineTo(shHigh.x, shHigh.y);
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([5, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Pin vertical guides + subtle depth ticks
+    // Subtle caliper guide connecting top uncut line down to H (blade width)
+    const calTop = keyToScreen(bladeLengthMm * 0.28, bladeWidthMm);
+    ctx.beginPath();
+    ctx.moveTo(calTop.x, calTop.y);
+    ctx.lineTo(widthHandleScr.x, widthHandleScr.y);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
+    ctx.lineWidth = 1.3;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Highlighted straight bottom spine line
+    ctx.beginPath();
+    ctx.moveTo(sOrigin.x, sOrigin.y);
+    ctx.lineTo(sTipBot.x, sTipBot.y);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Pin vertical guides + depth tick ladders
     const tickHalfMm = Math.min(0.55, inToMm(spec.pinSpacingIn) * 0.16);
     for (let i = 0; i < spec.pinCount; i++) {
       const cxMm = spacesMm[i]!;
@@ -284,7 +330,6 @@ export function DecoderCanvas({
         ctx.stroke();
       }
 
-      // Plain pin number above line
       const lbl = keyToScreen(cxMm, bladeWidthMm + 2.4);
       ctx.font = '600 11px ui-monospace, SFMono-Regular, monospace';
       ctx.textAlign = 'center';
@@ -296,11 +341,11 @@ export function DecoderCanvas({
       ctx.fillText(String(i + 1), lbl.x, lbl.y);
     }
 
-    // 3. Minimal draggable anchor handles (A = Shoulder, B = Tip, optional C = Skew)
+    // 3. Draggable Anchor Handles: A (Top Shoulder), H (Blade Width/Scale), B (Spine Angle)
     const drawAnchor = (pt: Point2D, letter: string, color: string) => {
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, 11, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
       ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
@@ -313,8 +358,9 @@ export function DecoderCanvas({
       ctx.fillText(letter, pt.x, pt.y + 0.5);
     };
 
-    drawAnchor(shoulderScr, 'A', '#38bdf8');
-    drawAnchor(tipScr, 'B', '#4ade80');
+    drawAnchor(shoulderTopScr, 'A', '#38bdf8');
+    drawAnchor(widthHandleScr, 'H', '#facc15');
+    drawAnchor(spineAngleHandleScr, 'B', '#4ade80');
     if (showSkewHandle) {
       drawAnchor(skewHandleScr, 'C', '#c084fc');
     }
@@ -353,8 +399,9 @@ export function DecoderCanvas({
     const dist = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y);
 
     let mode: DragMode = 'pan';
-    if (dist(pt, keyTransform.shoulderScr) <= hitR) mode = 'shoulder';
-    else if (dist(pt, keyTransform.tipScr) <= hitR) mode = 'tip';
+    if (dist(pt, keyTransform.shoulderTopScr) <= hitR) mode = 'shoulder';
+    else if (dist(pt, keyTransform.widthHandleScr) <= hitR) mode = 'width';
+    else if (dist(pt, keyTransform.spineAngleHandleScr) <= hitR) mode = 'spineAngle';
     else if (showSkewHandle && dist(pt, keyTransform.skewHandleScr) <= hitR) mode = 'skew';
 
     dragStateRef.current = { mode, startScreen: pt, startPan: { ...pan }, moved: false };
@@ -374,21 +421,50 @@ export function DecoderCanvas({
         x: state.startPan.x + (pt.x - state.startScreen.x),
         y: state.startPan.y + (pt.y - state.startScreen.y),
       });
-    } else if (state.mode === 'shoulder') {
-      onChangeAlignment({ ...alignment, shoulder: screenToNorm(pt) });
-    } else if (state.mode === 'tip') {
-      onChangeAlignment({ ...alignment, tip: screenToNorm(pt) });
-    } else if (state.mode === 'skew') {
-      const localPx = keyTransform.screenToKeyLocalPx(pt);
+      return;
+    }
+
+    if (state.mode === 'shoulder') {
+      onChangeAlignment({ ...alignment, shoulderTop: screenToNorm(pt) });
+      return;
+    }
+
+    if (state.mode === 'width') {
+      // Perpendicular distance from A (top shoulder) down to pointer along spineDir
+      const vx = pt.x - keyTransform.shoulderTopScr.x;
+      const vy = pt.y - keyTransform.shoulderTopScr.y;
+      const wPx = Math.max(16, vx * keyTransform.spineDir.x + vy * keyTransform.spineDir.y);
+      const denom = Math.max(1, stageH * viewScale * alignment.scaleMultiplier * alignment.heightScaleMultiplier);
+      const nextRatio = Math.max(0.03, Math.min(0.85, wPx / denom));
+      onChangeAlignment({ ...alignment, bladeWidthRatio: Number(nextRatio.toFixed(5)) });
+      return;
+    }
+
+    if (state.mode === 'spineAngle') {
+      // Rotate around A so the bottom spine line (at perpendicular distance effectiveSpineDistPx) passes through pointer
+      const vx = pt.x - keyTransform.shoulderTopScr.x;
+      const vy = pt.y - keyTransform.shoulderTopScr.y;
+      const r = Math.hypot(vx, vy);
+      const wEff = keyTransform.effectiveSpineDistPx;
+      if (r > wEff + 4) {
+        const phi = Math.atan2(vy, vx);
+        const alpha = Math.asin(Math.max(-0.999, Math.min(0.999, wEff / r)));
+        const thetaVis = phi - keyTransform.sSign * alpha;
+        const baseRad = flipHorizontal ? Math.PI - thetaVis : thetaVis;
+        const nextAngleDeg = normalizeAngleDeg((baseRad * 180) / Math.PI - alignment.rotationOffsetDeg);
+        onChangeAlignment({ ...alignment, angleDeg: nextAngleDeg });
+      }
+      return;
+    }
+
+    if (state.mode === 'skew') {
+      const vx = pt.x - keyTransform.shoulderTopScr.x;
+      const vy = pt.y - keyTransform.shoulderTopScr.y;
+      const alongX = vx * keyTransform.dir.x + vy * keyTransform.dir.y;
+      const expectedX = bladeLengthMm * 0.55 * keyTransform.pxPerMm;
       const denom = Math.max(10, bladeWidthMm * keyTransform.pxPerMm);
-      const nextHeight = Math.max(0.65, Math.min(1.45, (localPx.y * keyTransform.ySign) / denom));
-      const expectedX = bladeLengthMm * 0.5 * keyTransform.pxPerMm;
-      const nextSkew = Math.max(-0.35, Math.min(0.35, (localPx.x - expectedX) / denom));
-      onChangeAlignment({
-        ...alignment,
-        heightScaleMultiplier: Number(nextHeight.toFixed(3)),
-        skewY: Number(nextSkew.toFixed(3)),
-      });
+      const nextSkew = Math.max(-0.35, Math.min(0.35, (alongX - expectedX) / denom));
+      onChangeAlignment({ ...alignment, skewY: Number(nextSkew.toFixed(3)) });
     }
   };
 
@@ -517,7 +593,7 @@ export function DecoderCanvas({
         </div>
       </div>
 
-      {/* Collapsible fine-tune / image adjustments (hidden by default) */}
+      {/* Collapsible fine-tune / image adjustments */}
       {showTools && (
         <div
           data-testid="adjust-tools-bar"
@@ -615,7 +691,7 @@ export function DecoderCanvas({
               onChange={(e) => setShowSkewHandle(e.target.checked)}
               className="accent-blue-600"
             />
-            Skew handle (C)
+            Skew (C)
           </label>
 
           <button
@@ -682,9 +758,11 @@ export function DecoderCanvas({
         )}
       </div>
 
-      {/* Quiet 1-line instruction footer */}
+      {/* Clear 3-step locksmith alignment instruction */}
       <div className="border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
-        Drag <strong>A</strong> to the shoulder stop and <strong>B</strong> to the blade tip. Drag background to pan, scroll to zoom.
+        1. Drag <strong className="text-sky-600 dark:text-sky-400">A</strong> to top shoulder corner · 2. Drag{' '}
+        <strong className="text-amber-600 dark:text-amber-400">H</strong> to bottom spine (scale) · 3. Drag{' '}
+        <strong className="text-emerald-600 dark:text-emerald-400">B</strong> along bottom spine (angle)
       </div>
     </div>
   );
